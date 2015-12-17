@@ -24,7 +24,6 @@ Common interface for Quality and Status
 
 # pylint: disable=line-too-long
 
-
 import operator
 from os import path
 import platform
@@ -136,6 +135,12 @@ class Quality(object):
     FULLHDWEBDL = 1 << 6  # 64 -- 1080p web-dl
     HDBLURAY = 1 << 7  # 128
     FULLHDBLURAY = 1 << 8  # 256
+    UHD_4K_TV = 1 << 9  # 512 -- 2160p aka 4K UHD aka UHD-1
+    UHD_4K_WEBDL = 1 << 10  # 1024
+    UHD_4K_BLURAY = 1 << 11  # 2048
+    UHD_8K_TV = 1 << 12  # 512 -- 4320p aka 8K UHD aka UHD-2
+    UHD_8K_WEBDL = 1 << 13  # 1024
+    UHD_8K_BLURAY = 1 << 14  # 2048
     ANYHDTV = HDTV | FULLHDTV  # 20
     ANYWEBDL = HDWEBDL | FULLHDWEBDL  # 96
     ANYBLURAY = HDBLURAY | FULLHDBLURAY  # 384
@@ -154,7 +159,13 @@ class Quality(object):
         HDWEBDL: "720p WEB-DL",
         FULLHDWEBDL: "1080p WEB-DL",
         HDBLURAY: "720p BluRay",
-        FULLHDBLURAY: "1080p BluRay"
+        FULLHDBLURAY: "1080p BluRay",
+        UHD_4K_TV: "4K UHD TV",
+        UHD_8K_TV: "8K UHD TV",
+        UHD_4K_WEBDL: "4K UHD WEB-DL",
+        UHD_8K_WEBDL: "8K UHD WEB-DL",
+        UHD_4K_BLURAY: "4K UHD BluRay",
+        UHD_8K_BLURAY: "8K UHD BluRay",
     })
 
     sceneQualityStrings = NumDict({
@@ -168,7 +179,13 @@ class Quality(object):
         HDWEBDL: "720p WEB-DL",
         FULLHDWEBDL: "1080p WEB-DL",
         HDBLURAY: "720p BluRay",
-        FULLHDBLURAY: "1080p BluRay"
+        FULLHDBLURAY: "1080p BluRay",
+        UHD_4K_TV: "4K UHD TV",
+        UHD_8K_TV: "8K UHD TV",
+        UHD_4K_WEBDL: "4K UHD WEB-DL",
+        UHD_8K_WEBDL: "8K UHD WEB-DL",
+        UHD_4K_BLURAY: "4K UHD BluRay",
+        UHD_8K_BLURAY: "8K UHD BluRay",
     })
 
     combinedQualityStrings = NumDict({
@@ -262,7 +279,7 @@ class Quality(object):
         return Quality.UNKNOWN
 
     @staticmethod
-    def sceneQuality(name, anime=False):  # pylint: disable=too-many-branches
+    def old_scene_quality(name, anime=False):  # pylint: disable=too-many-branches
         """
         Return The quality from the scene episode File
 
@@ -323,6 +340,130 @@ class Quality(object):
             ret = Quality.FULLHDBLURAY
 
         return ret
+
+    @staticmethod
+    def scene_quality(name, anime=False):  # pylint: disable=too-many-branches
+        """
+        Return The quality from the scene episode File
+
+        :param name: Episode filename to analyse
+        :param anime: Boolean to indicate if the show we're resolving is Anime
+        :return: Quality prefix
+        """
+
+        if not name:
+            return Quality.UNKNOWN
+        else:
+            name = ek(path.basename, name)
+
+        result = None
+
+        if anime:
+            dvd = re.search(r'dvd(rip|mux)', name, re.IGNORECASE)
+            bluray = re.search(r'(blue?-?ray|b[rd](?:rip|mux))', name, re.IGNORECASE)
+            sd_options = re.search(r'(360p|480p|848x480|xvid)', name, re.IGNORECASE)
+            hd_options = re.search(r'(720p|(1280|960)x720)', name, re.IGNORECASE)
+            full_hd = re.search(r'(1080p|1920x1080)', name, re.IGNORECASE)
+
+            # BluRay
+            if bluray and (full_hd or hd_options):
+                result = Quality.FULLHDBLURAY if full_hd else Quality.HDBLURAY
+            # HD TV
+            elif not bluray and (full_hd or hd_options):
+                result = Quality.FULLHDTV if full_hd else Quality.HDTV
+            # SD DVD
+            elif dvd:
+                result = Quality.SDDVD
+            # SD TV
+            elif sd_options:
+                result = Quality.SDTV
+
+            return Quality.UNKNOWN if result is None else result
+
+        # Resolutions
+        vres = re.search(r'(4320|2160|1080|720|480|360)([pi])', name, re.IGNORECASE)
+        vres, scan = (vres.group(1), vres.group(2).lower()) if vres else ('', '')
+
+        # Sources
+        bluray = re.search(r'(blue?-?ray|b[rd](?:rip|mux))', name, re.IGNORECASE)
+        web = re.search(r'web.?(dl)|web(rip|mux|hd)', name, re.IGNORECASE)
+        itunes = re.search(r'(itunes)', name, re.IGNORECASE)
+
+        tv = re.search(r'([sph]d).?tv|tv(rip|mux)', name, re.IGNORECASE)
+        tv = tv.group().lower() if tv else ''
+
+        hrws = re.search(r'(hr.ws.pdtv).[xh].?26[45]', name, re.IGNORECASE)
+        raw = re.search(r'(1080[pi].hdtv)', name, re.IGNORECASE)
+
+        dvd = re.search(r'(hd)dvd|dvd(rip|mux)', name, re.IGNORECASE)
+        dvd = dvd.group().lower() if dvd else ''
+
+        sat = re.search(r'(dsr|satrip)', name, re.IGNORECASE)
+
+        # Codecs
+        avc = re.search(r'([xh].?26[45])', name, re.IGNORECASE)
+        avc = avc.group().lower() if avc else ''
+
+        mpeg = re.search(r'(mpeg-?2)', name, re.IGNORECASE)
+        xvid = re.search(r'(xvid|divx)', name, re.IGNORECASE)
+
+        # Is it UHD?
+        if vres in ['2160', '4320'] and scan == 'p':
+            # BluRay
+            if avc and bluray:
+                result = Quality.UHD_4K_BLURAY if vres == '2160' else Quality.UHD_8K_BLURAY
+            # WEB-DL
+            elif (avc and itunes) or web:
+                result = Quality.UHD_4K_WEBDL if vres == '2160' else Quality.UHD_8K_WEBDL
+            # HDTV
+            elif avc and tv[:2] == 'hd':
+                result = Quality.UHD_4K_TV if vres == '2160' else Quality.UHD_8K_TV
+
+        # Is it HD?
+        elif vres in ['720', '1080']:
+            if scan == 'p':
+                # BluRay
+                if avc and (bluray or dvd[:2] == 'hd'):
+                    result = Quality.HDBLURAY if vres == '720' else Quality.FULLHDBLURAY
+                # WEB-DL
+                elif (avc and itunes) or web:
+                    result = Quality.HDWEBDL if vres == '720' else Quality.FULLHDWEBDL
+                # HDTV
+                elif avc and tv[:2] == 'hd':
+                    if not all([vres == '1080', avc[0] == 'h', raw]):
+                        result = Quality.HDTV if vres == '720' else Quality.FULLHDTV
+                    else:
+                        result = Quality.RAWHDTV
+                elif all([vres == '720', tv[:2] == 'hd', mpeg]):
+                    result = Quality.RAWHDTV
+            elif (vres + scan) == '1080i' and tv[:2] == 'hd':
+                if mpeg or avc[0] == 'h':
+                    result = Quality.RAWHDTV
+        elif hrws:
+            result = Quality.HDTV
+
+        # Is it SD?
+        elif xvid or avc:
+            # SD DVD
+            if (dvd and dvd[:2] != 'hd') or bluray:
+                result = Quality.SDDVD
+            # SDTV
+            elif (vres + scan) == '480p' or any([tv, sat, web]):
+                result = Quality.SDTV
+
+        return Quality.UNKNOWN if result is None else result
+
+
+    @staticmethod
+    def sceneQuality(name, anime=False):
+        new = Quality.scene_quality(name, anime)
+
+        if new <= Quality.FULLHDBLURAY:
+            old = Quality.old_scene_quality(name, anime)
+            assert old == new, 'New quality does not match old: %s != %s' % (new, old)
+
+        return new
+
 
     @staticmethod
     def assumeQuality(name):
